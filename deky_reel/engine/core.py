@@ -33,7 +33,7 @@ class RenderContext:
     motion_blur: int = 1          # sub-frames per frame (1 = off)
     shutter: float = 0.5          # fraction of a frame interval the shutter is open
     grain: float = 0.022
-    vignette: float = 0.22
+    vignette: float = 0.12
     copy: dict = field(default_factory=dict)
     stats: dict = field(default_factory=dict)
     frame: int = 0                # current frame index (set by renderer)

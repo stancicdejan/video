@@ -156,7 +156,7 @@ def main(argv=None):
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--mblur", type=int, default=6, help="motion-blur sub-frames (1 = off)")
     p.add_argument("--grain", type=float, default=0.022)
-    p.add_argument("--vignette", type=float, default=0.22)
+    p.add_argument("--vignette", type=float, default=0.12)
     p.add_argument("--no-post", action="store_true")
     p.add_argument("--crf", type=int, default=18)
     p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2)))
