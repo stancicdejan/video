@@ -1,4 +1,4 @@
-"""S1 - Logo splash (0.00-1.00 s).
+"""S1 - Logo splash (0.00-1.36 s, logo complete by 0.62, exit from 0.88).
 
 The Deky Bike logo assembles itself from its own parts on the site's cream
 paper: the site's 64x4 heading underline grows into the logo bar, mountains
@@ -6,6 +6,11 @@ rise out of the bar, the diamond outline is drawn by two yellow "rider dots"
 that meet behind the rider, the rider jumps in and lands (dust + micro shake),
 the DEKY BIKE letters rise, the lower bar snaps open and the pennant slides
 down (the site's slide-down), then a light sweep glints across it.
+
+Exit (0.88-1.36, see docs/STORYBOARD.md T1): the rider is handed to s02 in
+its rest pose, the rest of the logo sinks and fades, and the top bar flies
+up to become the horizon line at y=365 that s02 opens like an aperture. The
+cream background keeps drawing underneath until 1.36.
 """
 import math
 
@@ -13,7 +18,10 @@ from deky_reel import brand as B
 from deky_reel.engine import draw, ease, logo
 from deky_reel.engine.color import mix, with_alpha
 
-START, END, LAYER = 0.0, 1.0, 10
+START, END, LAYER = 0.0, 1.36, 10
+EXIT = 0.88                 # s02 takes over the rider here
+HORIZON_Y = 365.0           # the bar flies up to become the s02 horizon
+RIDER_CAM = (960.0, 540.0, 1.02)
 
 CX, CY, LOGO_W = 960.0, 548.0, 740.0
 K = LOGO_W / logo.CONTENT_W           # design px per logo source px
@@ -240,8 +248,51 @@ def camera_state(t):
     return zoom, sh
 
 
+def draw_logo_exit_parts(ctx, R):
+    """The assembled logo without the rider (owned by s02 from EXIT) and
+    without the top bar (it is flying to the horizon as a vector rect)."""
+    logo.draw_part(ctx, R, "diamond", CX, CY, LOGO_W)
+    with draw.clipped(ctx, lambda c: c.rectangle(0, 0, 1920, BAR_TOP + 0.5)):
+        logo.draw_part(ctx, R, "mountains", CX, CY, LOGO_W)
+    logo.draw_part(ctx, R, "debris", CX, CY, LOGO_W)
+    for i in range(8):
+        logo.draw_part(ctx, R, f"letter{i}", CX, CY, LOGO_W)
+    logo.draw_part(ctx, R, "bar", CX, CY, LOGO_W)
+    logo.draw_part(ctx, R, "pennant", CX, CY, LOGO_W)
+    logo.draw_part(ctx, R, "tagline", CX, CY, LOGO_W)
+
+
+# Camera-transformed raster top bar at EXIT -> full-width 6 px horizon line.
+BAR_FROM = (582.6, 587.9, 754.8, 16.9)
+BAR_TO = (-40.0, HORIZON_Y - 3.0, 2000.0, 6.0)
+
+
+def draw_exit(ctx, R, t):
+    zoom = RIDER_CAM[2]
+    e = ease.in_quad(ease.progress(t, EXIT, 0.20))
+    if t < 1.08 and e < 1.0:
+        def fn(c):
+            with draw.camera(c, RIDER_CAM[0], RIDER_CAM[1], zoom):
+                with draw.transform(c, 0.0, 30.0 * e, scale=1.0 - 0.04 * e, pivot=(960.0, 596.0)):
+                    draw_logo_exit_parts(c, R)
+        if e > 0.02:
+            draw.blurred(ctx, R, 6.0 * e, fn, alpha=1.0 - e, bbox=(570, 190, 780, 720))
+        else:
+            with draw.group(ctx, 1.0 - e):
+                fn(ctx)
+    if t < 1.04:
+        q = ease.in_out_expo(ease.progress(t, EXIT, 0.16))
+        x, y, w, h = (a + (b - a) * q for a, b in zip(BAR_FROM, BAR_TO))
+        ctx.new_path()
+        draw.rounded_rect(ctx, x, y, w, h, h / 2)
+        draw.fill(ctx, mix(B.LOGO_GREEN, B.PRIMARY, q))
+
+
 def render(ctx, t, R):
     draw_background(ctx, t)
+    if t >= EXIT:
+        draw_exit(ctx, R, t)
+        return
     zoom, sh = camera_state(t)
     with draw.camera(ctx, 960, 540 - sh, zoom):
         draw_logo_assembly(ctx, R, t)
