@@ -65,6 +65,26 @@ def array_to_surface(arr):
     return surf
 
 
+def directional_blur_array(arr, length_px, axis=0):
+    """Box motion blur of a premultiplied BGRA array along one axis
+    (axis 0 = vertical). length_px is the streak length in device px."""
+    n = int(round(length_px))
+    if n < 2:
+        return arr
+    a = arr.astype(np.float32)
+    pad = n // 2
+    if axis == 0:
+        a = np.pad(a, ((pad, n - pad), (0, 0), (0, 0)), mode="constant")
+    else:
+        a = np.pad(a, ((0, 0), (pad, n - pad), (0, 0)), mode="constant")
+    c = np.cumsum(a, axis=axis)
+    if axis == 0:
+        out = (c[n:] - c[:-n]) / n
+    else:
+        out = (c[:, n:] - c[:, :-n]) / n
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
 def blur_array(arr, radius_px):
     """Gaussian blur of a premultiplied BGRA array (radius in device px)."""
     if radius_px <= 0.3:
@@ -213,6 +233,14 @@ class Offscreen:
         arr = surface_to_array(self.surface)
         blurred_arr = blur_array(arr.copy(), radius * self.unit)
         arr[...] = blurred_arr
+        self.surface.mark_dirty()
+        return self
+
+    def motion_blur(self, length, axis=0):
+        """Directional box blur; length in the user units of the matched context."""
+        arr = surface_to_array(self.surface)
+        out = directional_blur_array(arr.copy(), length * self.unit, axis)
+        arr[...] = out[:arr.shape[0], :arr.shape[1]]
         self.surface.mark_dirty()
         return self
 

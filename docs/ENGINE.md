@@ -62,6 +62,7 @@ Helpers: `anim(t, start, dur, a, b, ease)`, `keyframes(t, [(t0, v0), (t1, v1, ea
   transform (camera, page scale); `off.blur(radius)` (radius in ctx user units);
   `off.paint(ctx, alpha, operator)`. Shortcuts: `blurred(ctx, R, radius, draw_fn, alpha, operator, bbox=(x, y, w, h))`,
   `glow(ctx, R, radius, draw_fn, alpha, bbox=...)`, `soft_shadow(ctx, R, path_fn, blur, dx, dy, color)`.
+  `off.motion_blur(length, axis=0|1)` = directional streak blur (user units).
   Always pass `bbox` (user units) to `blurred`/`glow` when the effect is local: only that area
   (padded by 3x radius) is processed, which is many times faster than a full-frame blur.
   soft_shadow computes its own bbox. All of them respect the current transform.
@@ -131,6 +132,11 @@ laptop sun leaf trees zap gauge chevron-right share-2 message-circle.
 * `ui.card(ctx, R, x, y, w, h, fill, border, radius=24, shadow=.12, alpha)`: rounded-2xl card.
 * `ui.quick_info_bar(ctx, y, h, items, bg, fg, progress)`: sage uppercase bar.
 * `ui.counter_value(t, start, dur, target, ease)`; `ui.rolling_digits(ctx, t, start, dur, "12.500", x, y, font, size, color, align)` odometer counter.
+* `ui.odometer(ctx, t, value_fn, target, x, y, font, size, color, lang=R.lang, align, valign, settle=0, R=R)`:
+  carry-correct mechanical counter (columns roll only on real carries, tight digit window,
+  physically sized vertical motion streaks on fast columns when `R` is passed, tabular layout of
+  the final formatted number, leading zeros hidden). `value_fn(t)` returns the current value, e.g.
+  `lambda t: ui.counter_value(t, 3.0, 1.2, 12500, ease.out_expo)`. Prefer this over `rolling_digits`.
 * `ui.word_reveal(ctx, t, start, lay, x, y, color, align, valign, stagger, duration, distance, ease, mask)` masked word slide-up.
 * `ui.char_cascade(ctx, t, start, lay, x, y, color, ...)` per-character pop-in.
 

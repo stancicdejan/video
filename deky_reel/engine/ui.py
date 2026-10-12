@@ -220,3 +220,101 @@ def trail(ctx, fp, start, end, color, width=8.0, head=True, head_color=None, hea
         draw.circle(ctx, hx, hy, r)
         draw.fill(ctx, hc)
     return hx, hy, ang
+
+
+def odometer(ctx, t, value_fn, target, x, y, font, size, color, lang="sr", align="left",
+             valign="baseline", fps=30.0, settle=0.0, sep_color=None, smear=True,
+             hide_leading=True, R=None):
+    """Carry-correct mechanical odometer.
+
+    value_fn(t) -> current float value (e.g. lambda t: counter_value(t, 2.0, 1.4, 12500)).
+    Each column k shows floor(v / 10^k) mod 10; the units column rolls
+    continuously and higher columns only roll while every lower column is
+    passing 9 -> 0 (a real carry). Digits roll inside a tight window (like a
+    real counter). Columns spinning faster than ~0.5 cells/frame are drawn as
+    a softly blurred digit strip when R is given (pass R for that).
+    The layout is the final formatted target (thousands separators by lang)
+    in tabular figures, so nothing jitters. Leading columns that are still 0
+    stay hidden until the value reaches them.
+    settle: 0..1 relaxes from tabular to proportional digit spacing (after landing).
+    Returns the TextLayout of the final string (for positioning neighbours).
+    """
+    from .. import brand as _B
+    final = _B.fmt_int(target, lang)
+    lay_tab = text.layout(font, size, final, features=text.tabular())
+    lay_prop = text.layout(font, size, final)
+    ox, oy = lay_tab.origin(x, y, align, valign)
+    v = max(0.0, value_fn(t))
+    v_prev = max(0.0, value_fn(t - 1.0 / fps))
+    c = rgba(color)
+    sc = rgba(sep_color) if sep_color is not None else c
+    cap = lay_tab.cap_height
+    line_h = cap * 1.42
+    n_digits = sum(ch.isdigit() for ch in final)
+    digit_lays = {d: text.layout(font, size, d, features=text.tabular()) for d in "0123456789"}
+    ks = []
+    k = n_digits - 1
+    for g in lay_tab.glyphs:
+        if g.char.isdigit():
+            ks.append(k)
+            k -= 1
+        else:
+            ks.append(None)
+    prop_x = {g.index: g.x for g in lay_prop.glyphs}
+    win_top = oy - cap - cap * 0.10
+    win_h = cap * 1.22
+    for g, kk in zip(lay_tab.glyphs, ks):
+        gx = g.x + (prop_x.get(g.index, g.x) - g.x) * settle
+        if kk is None:
+            left_k = None
+            for g2, k2 in zip(lay_tab.glyphs, ks):
+                if g2.index > g.index:
+                    break
+                if k2 is not None:
+                    left_k = k2
+            vis = 1.0
+            if hide_leading and left_k is not None and v < 10 ** left_k:
+                vis = 0.0
+            if vis > 0 and not g.is_space:
+                gl = text.layout(font, size, g.char, features=text.tabular())
+                gl.draw(ctx, ox + gx, oy, sc)
+            continue
+        p = 10.0 ** kk
+        if hide_leading and kk > 0 and v < p:
+            continue
+        pos = v / p
+        base = int(pos) % 10
+        if kk == 0:
+            frac = pos - int(pos)
+        else:
+            rem = v - int(v / p) * p
+            frac = ease.clamp(rem - (p - 1.0))
+        speed = abs(v - v_prev) / p
+        cx0 = ox + gx
+        ctx.save()
+        ctx.new_path()
+        ctx.rectangle(cx0 - g.advance * 0.1, win_top, g.advance * 1.2, win_h)
+        ctx.clip()
+        fast = smear and R is not None and speed > 0.5
+
+        def strip(cc, base=base, frac=frac, cx0=cx0, adv=g.advance, n=2 if not fast else 3):
+            for j in range(-n + 1, n + 1):
+                d = (base + j) % 10
+                dl = digit_lays[str(d)]
+                dl.draw(cc, cx0 + (adv - dl.width) / 2, oy + (j - frac) * line_h, c)
+
+        if fast:
+            # Physically sized streak: distance travelled while the shutter
+            # is open (half a frame), capped at about one digit.
+            streak = min(speed * line_h * 0.5, line_h * 1.1)
+            region = draw.device_region(ctx, cx0 - g.advance * 0.1, win_top - streak,
+                                        cx0 + g.advance * 1.1, win_top + win_h + streak)
+            off = draw.Offscreen(R, match=ctx, region=region)
+            if not off.empty:
+                strip(off.ctx)
+                off.motion_blur(streak, axis=0)
+                off.paint(ctx)
+        else:
+            strip(ctx)
+        ctx.restore()
+    return lay_tab
