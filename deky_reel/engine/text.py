@@ -380,3 +380,19 @@ def tabular(features=None):
     if features:
         f.update(features)
     return f
+
+
+def wrap(font_key, size, string, max_width, tracking=0.0, features=None):
+    """Greedy word wrap -> list of line strings that fit max_width."""
+    words = string.split()
+    lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if not cur or layout(font_key, size, trial, tracking, features).width <= max_width:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines

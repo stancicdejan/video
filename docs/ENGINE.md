@@ -159,3 +159,19 @@ mountain ridge as a wipe edge), `iris(ctx, cx, cy, progress)`,
 `diagonal_wipe(ctx, progress, angle)`, `bars(ctx, progress, count, stagger, vertical)`,
 `ridge_profile(width, amplitude)` -> points. Use with
 `with draw.masked(ctx, lambda c: transitions.ridge_wipe(c, p)): draw_next_scene()`.
+
+### site_mock (the real deky.bike home page, vector-rebuilt from the site source)
+`site_mock.draw_browser(ctx, R, x, y, w, h, content=fn, url="deky.bike", radius=18, chrome_h=56, shadow=.28, alpha=1, dark=False)`
+draws a browser window; `content(ctx, cx, cy, cw, ch)` fills the viewport.
+`site_mock.draw_page(ctx, R, x, y, w, h, scroll=0, t=None, load_start=None, hero_zoom=1, sticky=None)`
+draws the home page (transparent header with logo, nav, SR switcher and the
+'Rezerviši' pill; hero photo with 50% forest overlay, 'Sedi. Upali. Kreni.',
+subtitle and CTA with the site's staggered fade-in-up starting at `load_start`;
+sage quick-info bar; 'Zašto baš Deky Bike?' heading, underline and 3 cards).
+`scroll` is in CSS px of a 1440x810 viewport; the header turns sticky
+(muted bar, slide-down) after the hero, like the site. Building blocks:
+`draw_header`, `draw_hero`, `draw_sections`; constants `VIEWPORT_W/H`, `HERO_H`, `HEADER_H`.
+`text.wrap(font, size, string, max_width)` -> lines.
+`draw.camera(ctx, look_x, look_y, zoom, rot, screen_x=960, screen_y=540)`: virtual camera context
+(push-ins, whip pans, flying through a glyph). `ui.trail(ctx, fp, start, end, color, width, head=True, head_color, head_r, glow_R=R)`:
+the ride-line motif (trimmed stroke + glowing head dot), returns the head (x, y, angle).

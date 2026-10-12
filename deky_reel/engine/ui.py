@@ -197,3 +197,26 @@ def char_cascade(ctx, t, start, lay, x, y, color, align="left", valign="baseline
                     rot=(1 - e) * rot_from, alpha=ease.out_quad(p * 1.6) if fade else 1.0)
 
     lay.draw(ctx, x, y, c, align=align, valign=valign, per_glyph=pg)
+
+
+def trail(ctx, fp, start, end, color, width=8.0, head=True, head_color=None, head_r=None,
+          glow_R=None, glow_radius=14.0):
+    """The 'ride line' motif: a stroked trim of FlatPath fp from start to end
+    (fractions) with an optional glowing head dot at `end`.
+    Returns the head position (x, y, angle)."""
+    if end <= start:
+        return fp.point_at(end)
+    ctx.new_path()
+    fp.emit(ctx, start, end)
+    draw.stroke(ctx, color, width)
+    hx, hy, ang = fp.point_at(end)
+    if head:
+        r = head_r if head_r is not None else width * 1.25
+        hc = head_color if head_color is not None else color
+        if glow_R is not None:
+            draw.blurred(ctx, glow_R, glow_radius, lambda c: (draw.circle(c, hx, hy, r * 1.8),
+                                                              draw.fill(c, with_alpha(hc, 0.85))),
+                         operator="screen")
+        draw.circle(ctx, hx, hy, r)
+        draw.fill(ctx, hc)
+    return hx, hy, ang

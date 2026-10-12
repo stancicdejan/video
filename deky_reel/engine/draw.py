@@ -483,3 +483,21 @@ def trim_stroke(ctx, path_fn, start, end, color, width, cap="round", join="round
     fp.emit(ctx, start, end)
     stroke(ctx, color, width, cap, join)
     return fp
+
+
+@contextmanager
+def camera(ctx, look_x=960.0, look_y=540.0, zoom=1.0, rot=0.0, screen_x=960.0, screen_y=540.0):
+    """Virtual 2D camera: the design-space point (look_x, look_y) appears at
+    (screen_x, screen_y) on screen, magnified by zoom and rotated by rot (deg).
+    Push-ins, whip pans and 'fly through a glyph' moves are animations of
+    look/zoom."""
+    ctx.save()
+    try:
+        ctx.translate(screen_x, screen_y)
+        if rot:
+            ctx.rotate(math.radians(rot))
+        ctx.scale(max(zoom, 1e-5), max(zoom, 1e-5))
+        ctx.translate(-look_x, -look_y)
+        yield ctx
+    finally:
+        ctx.restore()
