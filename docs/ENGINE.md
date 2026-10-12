@@ -58,10 +58,13 @@ Helpers: `anim(t, start, dur, a, b, ease)`, `keyframes(t, [(t0, v0), (t1, v1, ea
   `masked(ctx, mask_fn, alpha, invert)` (keep content where `mask_fn(ctx)` paints),
   `clipped(ctx, path_fn)`.
 * Operators: `over add screen multiply overlay soft_light color_dodge lighten darken dest_in dest_out`.
-* Offscreen/blur: `off = draw.offscreen(R)`; draw into `off.ctx`; `off.blur(radius_design_px)`;
-  `off.paint(ctx, alpha, operator)`. Shortcuts: `blurred(ctx, R, radius, draw_fn, alpha, operator)`,
-  `glow(ctx, R, radius, draw_fn, alpha)`, `soft_shadow(ctx, R, path_fn, blur, dx, dy, color)`.
-  Offscreen layers are full frame; use a handful per frame at most.
+* Offscreen/blur: `off = draw.offscreen(R, match=ctx, region=None)` draws with ctx's current
+  transform (camera, page scale); `off.blur(radius)` (radius in ctx user units);
+  `off.paint(ctx, alpha, operator)`. Shortcuts: `blurred(ctx, R, radius, draw_fn, alpha, operator, bbox=(x, y, w, h))`,
+  `glow(ctx, R, radius, draw_fn, alpha, bbox=...)`, `soft_shadow(ctx, R, path_fn, blur, dx, dy, color)`.
+  Always pass `bbox` (user units) to `blurred`/`glow` when the effect is local: only that area
+  (padded by 3x radius) is processed, which is many times faster than a full-frame blur.
+  soft_shadow computes its own bbox. All of them respect the current transform.
 * Paths: `rounded_rect(ctx,x,y,w,h,r)`, `pill`, `circle(ctx,cx,cy,r)`, `polygon(ctx, pts)`,
   `smooth_polyline(ctx, pts, tension)` (Catmull-Rom), `star`, `arc_path`.
 * Paint: `fill(ctx, color)`, `stroke(ctx, color, width, cap, join, dash)`,

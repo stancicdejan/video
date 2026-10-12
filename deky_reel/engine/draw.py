@@ -171,24 +171,48 @@ def clipped(ctx, path_fn):
 
 
 class Offscreen:
-    """A full-frame offscreen layer in device pixels with the design scale.
+    """An offscreen layer in device pixels for effects cairo cannot do
+    natively (blur, glow).
 
-    Use for effects cairo cannot do natively (blur, glow):
-        with offscreen(ctx, R) as off:
-            draw(off.ctx)
-            off.blur(12)          # design px
+        off = Offscreen(R, match=ctx)       # same transform as ctx
+        draw(off.ctx); off.blur(12)         # radius in user units of ctx
         off.paint(ctx, alpha)
+
+    match: copy ctx's current transform (camera, page scale...) so content
+    lands exactly where it would on ctx. region: optional device-pixel box
+    (x0, y0, x1, y1) to allocate only that part of the frame (much faster).
     """
 
-    def __init__(self, R):
+    def __init__(self, R, match=None, region=None):
         self.R = R
-        self.surface = new_surface(R.px_w, R.px_h)
-        self.ctx = design_context(self.surface, R.scale)
+        if region is None:
+            self.ox, self.oy = 0, 0
+            w, h = R.px_w, R.px_h
+        else:
+            x0 = max(0, int(math.floor(region[0])))
+            y0 = max(0, int(math.floor(region[1])))
+            x1 = min(R.px_w, int(math.ceil(region[2])))
+            y1 = min(R.px_h, int(math.ceil(region[3])))
+            self.ox, self.oy = x0, y0
+            w, h = max(1, x1 - x0), max(1, y1 - y0)
+        self.empty = region is not None and (w <= 1 or h <= 1)
+        self.surface = new_surface(w, h)
+        self.ctx = cairo.Context(self.surface)
+        self.ctx.set_antialias(cairo.ANTIALIAS_BEST)
+        if match is not None:
+            m = match.get_matrix()
+            self.unit = math.sqrt(abs(m.xx * m.yy - m.xy * m.yx))
+            self.ctx.set_matrix(cairo.Matrix(m.xx, m.yx, m.xy, m.yy, m.x0 - self.ox, m.y0 - self.oy))
+        else:
+            self.unit = R.scale
+            self.ctx.translate(-self.ox, -self.oy)
+            self.ctx.scale(R.scale, R.scale)
 
     def blur(self, radius):
+        """Gaussian blur; radius in the user units of the matched context."""
         arr = surface_to_array(self.surface)
-        blurred = blur_array(arr.copy(), radius * self.R.scale)
-        arr[...] = blurred
+        blurred_arr = blur_array(arr.copy(), radius * self.unit)
+        arr[...] = blurred_arr
         self.surface.mark_dirty()
         return self
 
@@ -196,46 +220,76 @@ class Offscreen:
         ctx.save()
         ctx.identity_matrix()
         ctx.set_operator(OPERATORS[operator])
-        ctx.set_source_surface(self.surface, 0, 0)
+        ctx.set_source_surface(self.surface, self.ox, self.oy)
         ctx.paint_with_alpha(min(max(alpha, 0.0), 1.0))
         ctx.restore()
 
     def as_pattern(self):
         pat = cairo.SurfacePattern(self.surface)
         m = cairo.Matrix()
-        m.scale(self.R.scale, self.R.scale)  # design -> device
+        m.translate(-self.ox, -self.oy)
         pat.set_matrix(m)
         return pat
 
 
-def offscreen(R):
-    return Offscreen(R)
+def offscreen(R, match=None, region=None):
+    return Offscreen(R, match, region)
 
 
-def blurred(ctx, R, radius, draw_fn, alpha=1.0, operator="over"):
-    """Draw draw_fn(ctx) into a layer, gaussian-blur it, composite it."""
-    off = Offscreen(R)
+def device_region(ctx, x0, y0, x1, y1, pad=0.0):
+    """Device-pixel bounding box of a user-space rect under ctx's transform,
+    padded by `pad` user units."""
+    pts = [ctx.user_to_device(x, y) for x, y in ((x0 - pad, y0 - pad), (x1 + pad, y0 - pad),
+                                                 (x0 - pad, y1 + pad), (x1 + pad, y1 + pad))]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def blurred(ctx, R, radius, draw_fn, alpha=1.0, operator="over", bbox=None):
+    """Draw draw_fn(ctx) into a layer with ctx's transform, gaussian-blur it
+    (radius in ctx user units) and composite it. bbox=(x, y, w, h) in user
+    units limits the work to that area (padded by 3x radius)."""
+    region = None
+    if bbox is not None:
+        x, y, w, h = bbox
+        region = device_region(ctx, x, y, x + w, y + h, pad=3.0 * radius)
+    off = Offscreen(R, match=ctx, region=region)
+    if off.empty:
+        return
     draw_fn(off.ctx)
     off.blur(radius)
     off.paint(ctx, alpha, operator)
 
 
-def glow(ctx, R, radius, draw_fn, alpha=1.0, crisp=True):
+def glow(ctx, R, radius, draw_fn, alpha=1.0, crisp=True, bbox=None):
     """Additive bloom: blurred copy screened under (and optionally over) a crisp draw."""
-    blurred(ctx, R, radius, draw_fn, alpha, "screen")
+    blurred(ctx, R, radius, draw_fn, alpha, "screen", bbox=bbox)
     if crisp:
         draw_fn(ctx)
 
 
 def soft_shadow(ctx, R, path_fn, blur=24.0, dx=0.0, dy=12.0, color=(0, 0, 0, 0.18)):
-    """Blurred drop shadow for an arbitrary shape (path_fn appends a path)."""
+    """Blurred drop shadow for an arbitrary shape (path_fn appends a path).
+    Only the shape's neighbourhood is blurred, and the current transform of
+    ctx (camera, page scale) is respected."""
+    ctx.save()
+    ctx.new_path()
+    ctx.translate(dx, dy)
+    path_fn(ctx)
+    x0, y0, x1, y1 = ctx.fill_extents()
+    ctx.new_path()
+    ctx.restore()
+    if x1 <= x0 or y1 <= y0:
+        return
+
     def draw(c):
         c.translate(dx, dy)
         c.new_path()
         path_fn(c)
         c.set_source_rgba(*rgba(color))
         c.fill()
-    blurred(ctx, R, blur, draw)
+    blurred(ctx, R, blur, draw, bbox=(x0 + dx, y0 + dy, x1 - x0, y1 - y0))
 
 
 # --- path builders ------------------------------------------------------------
