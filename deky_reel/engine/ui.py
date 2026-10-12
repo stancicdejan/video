@@ -216,7 +216,7 @@ def trail(ctx, fp, start, end, color, width=8.0, head=True, head_color=None, hea
         if glow_R is not None:
             draw.blurred(ctx, glow_R, glow_radius, lambda c: (draw.circle(c, hx, hy, r * 1.8),
                                                               draw.fill(c, with_alpha(hc, 0.85))),
-                         operator="screen")
+                         operator="screen", bbox=(hx - r * 1.8, hy - r * 1.8, r * 3.6, r * 3.6))
         draw.circle(ctx, hx, hy, r)
         draw.fill(ctx, hc)
     return hx, hy, ang

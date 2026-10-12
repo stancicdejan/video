@@ -180,7 +180,7 @@ def draw_rider_dots(ctx, R, t):
         def dot(c, x=x, y=y):
             draw.circle(c, x, y, 13)
             draw.fill(c, with_alpha(B.ACCENT, 0.9 * a))
-        draw.blurred(ctx, R, 10, dot, operator="screen")
+        draw.blurred(ctx, R, 10, dot, operator="screen", bbox=(x - 13, y - 13, 26, 26))
         draw.circle(ctx, x, y, 7)
         draw.fill(ctx, with_alpha(B.ACCENT, a))
         ctx.new_path()
